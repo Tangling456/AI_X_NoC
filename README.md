@@ -25,9 +25,6 @@ The global tick frequency is changed from the original `1ps` to `1GHz`:
 m5.ticks.setGlobalFrequency("1GHz")
 ```
 
-> Note: the Lab asks for `2GHz`. The experiment results in `labs_copy/` were
-> generated with `2GHz`; the working tree currently sets `1GHz`. The choice
-> only rescales throughput numbers and does not change latency behaviour.
 
 ### Task 2: Statistics units & the reception-rate metric
 
