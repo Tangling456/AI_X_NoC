@@ -14,7 +14,7 @@ marked on the plots.
 
 Outputs
 -------
-* ``results/lab3_task1.csv``
+* ``results/data/lab3_task1.csv``
 * ``results/figures/lab3_task1_analysis.png`` (latency / hops / link-utilization panels)
 
 Usage
@@ -33,7 +33,7 @@ NUM_CPUS = 16
 SIM_CYCLES = 100000
 ROUTING = 3  # ring routing (outportComputeRing)
 
-CSV = RESULTS / "lab3_task1.csv"
+CSV = DATA / "lab3_task1.csv"
 RAW_DIR = RAW / "lab3_task1"
 
 FIELDS = [

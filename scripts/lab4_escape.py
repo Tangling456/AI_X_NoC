@@ -17,7 +17,7 @@ deadlock); a higher value means the network was merely saturated.
 
 Outputs
 -------
-* ``results/lab4_escape.csv``
+* ``results/data/lab4_escape.csv``
 * ``results/figures/lab4_escape_injvnet-1_analysis.png``  (inj-vnet=-1, mixed vnets)
 * ``results/figures/lab4_escape_injvnet0_analysis.png``  (inj-vnet=0, 1-flit)
 
@@ -47,7 +47,7 @@ INJ_VNETS = [
     (0, "_vnet0", "inj-vnet=0 (1-flit)", "lab4_escape_injvnet0_analysis.png"),
 ]
 
-CSV = RESULTS / "lab4_escape.csv"
+CSV = DATA / "lab4_escape.csv"
 RAW_DIR = RAW / "lab4_escape"
 
 FIELDS = [
@@ -270,8 +270,9 @@ def _plot_one(plt, rows, caption_label, fname):
         ("hops", "Average hops", "Average Hops vs Injection Rate"),
     ]
 
-    fig, axes = plt.subplots(1, 4, figsize=(22, 5))
-    for ax, (key, ylabel, caption) in zip(axes, panels):
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+    axes_flat = axes.ravel()
+    for ax, (key, ylabel, caption) in zip(axes_flat, panels):
         draw(ax, key)
         ax.set_xlabel("Injection rate (packets/node/cycle)")
         ax.set_ylabel(ylabel)
@@ -279,15 +280,15 @@ def _plot_one(plt, rows, caption_label, fname):
         ax.grid(True, alpha=0.3)
 
     # latency spans several orders of magnitude -> log scale
-    axes[0].set_yscale("log")
+    axes_flat[0].set_yscale("log")
 
     # single shared legend below the figure (incl. deadlock/saturated markers)
-    axes[0].scatter([], [], marker="x", color="red", s=50, lw=1.5,
-                    label="deadlock (collapsed)")
-    axes[0].scatter([], [], marker="o", facecolor="none", edgecolor="gray",
-                    s=40, label="saturated (probe)")
+    axes_flat[0].scatter([], [], marker="x", color="red", s=50, lw=1.5,
+                         label="deadlock (collapsed)")
+    axes_flat[0].scatter([], [], marker="o", facecolor="none", edgecolor="gray",
+                         s=40, label="saturated (probe)")
     handles, labels = [], []
-    for ax in axes:
+    for ax in axes_flat:
         for h, l in zip(*ax.get_legend_handles_labels()):
             if l not in labels:
                 handles.append(h)

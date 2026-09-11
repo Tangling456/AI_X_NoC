@@ -12,9 +12,8 @@ Setup: Ring (16 nodes), ring routing (``--routing-algorithm=3``), 100000 cycles.
 
 Outputs
 -------
-* ``results/lab3_task2.csv``
-* ``results/figures/lab3_task2_latency_<pattern>.png``
-* ``results/figures/lab3_task2_throughput_<pattern>.png``
+* ``results/data/lab3_task2.csv``
+* ``results/figures/lab3_task2_<pattern>_analysis.png``
 
 Usage
 -----
@@ -38,7 +37,7 @@ NUM_CPUS = 16
 SIM_CYCLES = 100000
 ROUTING = 3
 
-CSV = RESULTS / "lab3_task2.csv"
+CSV = DATA / "lab3_task2.csv"
 RAW_DIR = RAW / "lab3_task2"
 
 FIELDS = [

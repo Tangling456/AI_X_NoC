@@ -1,232 +1,99 @@
-# gem5 Garnet Labs — Source Code Modifications
+# gem5 Garnet Labs
 
-This document describes **only the source-code changes** made to the gem5
-Garnet network simulator for Labs 1–4. 
+Labs 1–4 built on gem5's Garnet 3.0 network simulator: synthetic-traffic
+statistics (Lab 1), performance analysis of an 8×8 mesh (Lab 2), a 1D-ring
+topology with wormhole flow control (Lab 3), and deadlock-free flow control on
+the ring — escape virtual channels and bubble flow control (Lab 4).
 
-All changes live in two places:
-
-- `configs/` — the synthetic-traffic test script and the new `Ring` topology.
-- `src/mem/ruby/network/garnet/` — the Garnet router micro-architecture.
-
-The standalone Garnet build used for all experiments is
-`build/Garnet_standalone/gem5.opt`.
-
----
-
-## 1. Lab 1 — Synthetic Traffic & Statistics
-
-### Task 1: Global frequency
-
-**File:** `configs/example/garnet_synth_traffic.py`
-
-The global tick frequency is changed from the original `1ps` to `1GHz`:
-
-```python
-m5.ticks.setGlobalFrequency("1GHz")
-```
-
-
-### Task 2: Statistics units & the reception-rate metric
-
-**Files:** `src/mem/ruby/network/garnet/GarnetNetwork.cc`, `network_stats.txt`
-
-Every statistic registered in `GarnetNetwork::regStats()` gets an explicit
-gem5 unit via `.unit(...)`:
-
-- `packets_injected` / `packets_received` / `flits_injected` / `flits_received` → `Count`
-- `packet_network_latency` / `packet_queueing_latency` / `flit_network_latency` /
-  `flit_queueing_latency` → `Tick`
-- `average_*_latency` → `Tick/Count`
-- `average_hops` → `Count/Count`
-- link utilizations → `Cycle`; `avg_link_utilization` / `avg_vc_load` → `Ratio`
-
-A new metric, **Reception Rate**, is added to `network_stats.txt`:
+## Repository layout
 
 ```
-reception_rate = <value> (packets/node/cycle)
+.
+├── src_modified/   # the gem5 files we modified, in their original tree layout
+├── scripts/        # experiment run + plot scripts (Labs 2–4)
+├── results/        # experiment data (CSV), figures (PNG) and LaTeX reports
+└── assignments/    # lab handouts (Lab0–Lab4)
 ```
 
-computed as `packets_received / num_cpus / sim_cycles`.
+- **`src_modified/`** — the only gem5 files changed for these labs, kept in
+  gem5's relative paths (`configs/...`, `src/mem/ruby/network/garnet/...`) so
+  they can be overlaid on a gem5 checkout; `src_modified/README.md` describes
+  every change, lab by lab.
+- **`scripts/`** — Python 3 scripts that run the simulations and draw the
+  figures; `scripts/README.md` has the experiment matrix and usage.
+- **`results/`** — committed outputs: summary CSVs (`data/`), figures
+  (`figures/`) and the lab reports (`reports/`); see `results/README.md`.
+- **`assignments/`** — the original lab handouts this work follows.
 
----
+## Labs at a glance
 
-## 2. Lab 2 — Performance Analysis
+| Lab | Topic | Highlights |
+|-----|-------|------------|
+| 1 | Synthetic traffic & statistics | global frequency set to 1 GHz (unified with the simulation clock); statistic units completed; new **reception rate** metric |
+| 2 | Performance analysis | 8×8 Mesh_XY, 5 traffic patterns; sweeps of `--vcs-per-vnet`, `--router-latency`, `--link-width-bits` |
+| 3 | Topology & flow control | new **Ring** (1D-torus) topology (`--routing-algorithm=3`) with minimal adaptive routing; **wormhole** flow control (`--wormhole`, depth 16) |
+| 4 | Project: deadlock-free flow control | **escape virtual channels** (`--escape-vc-per-vnet=N`, Duato's theorem) and **bubble flow control** (`--bubble`) eliminate deadlocks on the ring |
 
-**No source-code changes.**
+All experiments use the standalone Garnet build with a 1 GHz global frequency
+(1 cycle = 1 tick) and single-flit `--inj-vnet=0` synthetic traffic; the
+escape-VC runs additionally use `--inj-vnet=-1`.
 
-Both tasks reuse the existing `garnet_synth_traffic.py` and only sweep its
-parameters:
+## Quick start
 
-- Task 1: 5 traffic patterns (`uniform_random`, `shuffle`, `transpose`,
-  `tornado`, `neighbor`) × injection rates 0.01–0.5 on an 8×8 Mesh_XY.
-- Task 2: parameter sensitivity of `--vcs-per-vnet`, `--router-latency`,
-  `--link-width-bits` under `uniform_random`.
+1. Install the gem5 build dependencies (Ubuntu/Debian example — the same list
+   as in `assignments/Lab0_Preliminary.md`; see the
+   [gem5 building docs](https://www.gem5.org/documentation/general_docs/building)
+   for other platforms):
 
----
+   ```bash
+   sudo apt install build-essential git m4 scons zlib1g zlib1g-dev \
+       libprotobuf-dev protobuf-compiler libprotoc-dev libgoogle-perftools-dev \
+       python3-dev libboost-all-dev pkg-config
+   ```
 
-## 3. Lab 3 — Topology & Flow Control
+2. Download a gem5 source tree; the full gem5 checkout is not part of this
+   repository.  The changes were developed against the `v23.0.0.1` release, so
+   clone that tag (or download a release archive from
+   [gem5.org](https://www.gem5.org/)):
 
-### Task 1: Ring (1D-torus) topology + ring routing
+   ```bash
+   git clone --depth 1 --branch v23.0.0.1 https://github.com/gem5/gem5.git
+   pip install -r gem5/requirements.txt   # optional (gem5 dev tooling)
+   pip install matplotlib                 # for the plotting step
+   ```
 
-**New file:** `configs/topologies/Ring.py`
+3. Replace the corresponding files in the gem5 tree with the versions from
+   `src_modified/` (they mirror gem5's own paths, so copying the tree over
+   replaces exactly the files that were changed), then build the standalone
+   Garnet binary (from this repository's root):
 
-`class Ring(SimpleTopology)` places `num_cpus` routers in a closed loop. Each
-router has two bidirectional internal links — one leaving via the `"Right"`
-outport and arriving at the right neighbour's `"Left"` inport, and one leaving
-via `"Left"` and arriving at the left neighbour's `"Right"` inport. External
-links attach each controller to its router, as in `Mesh_XY`.
+   ```bash
+   cp -r src_modified/. /path/to/gem5/
+   cd /path/to/gem5
+   scons build/Garnet_standalone/gem5.opt -j $(nproc)
+   ```
 
-**Files:** `src/mem/ruby/network/garnet/CommonTypes.hh`,
-`RoutingUnit.hh/.cc`, `Router.hh/.cc`
+   This produces `build/Garnet_standalone/gem5.opt` — the binary the
+   experiment scripts expect (equivalent to the handout's
+   `scons build/NULL/gem5.opt PROTOCOL=Garnet_standalone`, i.e. the same
+   configuration in a differently named build directory).  The build takes
+   about 15–30 min and several GB of memory (6–9 GB) — reduce `-j` if you are
+   short on RAM or swap.
 
-- A new routing algorithm id is registered:
-  `enum RoutingAlgorithm { ... RING_ = 3, ... }`.
-- `RoutingUnit::outportCompute()` dispatches `RING_` to a new
-  `outportComputeRing()`, and accepts a new `bool escape` flag that selects
-  between adaptive and escape routing.
-- `Router::route_compute()` is extended with the same `escape` flag and
-  forwards it to the routing unit.
+4. Run an experiment from `scripts/`, or simply re-draw its figures from the
+   committed CSV (fast, no simulation and no gem5 build needed):
 
-**`outportComputeRing()`** — minimal adaptive ring routing. It computes the
-clockwise (`Right`) and counter-clockwise (`Left`) distances to the
-destination and picks the shorter direction, tie-breaking toward `Right`
-for diametrically opposite routers.
+   ```bash
+   cd scripts
+   python3 lab4_bubble.py --plot-only    # figures only
+   export GEM5_ROOT=/path/to/gem5        # needed for actual simulations
+   python3 lab4_bubble.py                # full re-run (hours)
+   ```
 
-**`outportComputeRingEscape()`** — deadlock-free escape routing used by Lab 4.
-It cuts the ring at a dateline between router `0` and router `n-1` and moves
-monotonically toward the destination (`Right` if `dest >= me`, else `Left`),
-so the escape channel-dependency graph is acyclic.
+   Without `GEM5_ROOT`, the scripts expect the gem5 tree at `../gem5`
+   (relative to the directory you run them from).
 
-### Task 2: Wormhole flow control
+5. Compile any report from `results/reports/` (e.g. `pdflatex
+   Lab4_report.tex`); figures are resolved from `../figures/`.
 
-Enabled with `--wormhole`. By default a VC holds exactly one packet; with
-wormhole it can hold up to `WORMHOLE_DEPTH = 16` single-flit packets
-(only `HEAD_TAIL_` flits are injected in the experiments).
-
-**Files changed:**
-
-| File | Change |
-|------|--------|
-| `configs/example/garnet_synth_traffic.py` | `--wormhole` flag, forwarded to `system.ruby.network.wormhole` |
-| `GarnetNetwork.py` | new `wormhole` SimObject param |
-| `GarnetNetwork.hh/.cc` | store `m_wormhole`, expose `isWormhole()` |
-| `CommonTypes.hh` | `#define WORMHOLE_DEPTH 16` |
-| `OutVcState.cc` | credit count initialised to `WORMHOLE_DEPTH` instead of the data/ctrl buffer depth |
-| `VirtualChannel.hh/.cc` | add `isBufferEmpty()` helper |
-| `InputUnit.hh` | add `isBufferEmpty()` wrapper |
-| `InputUnit.cc` | a `HEAD_TAIL_` flit may arrive while the VC is already `ACTIVE_`; the VC is only activated on the first flit, and each flit stores its own computed output port |
-| `OutputUnit.hh/.cc` | `has_vc_available()` / `select_vc()` — a VC is usable when it has a free buffer slot (positive credit), not only when idle |
-| `SwitchAllocator.hh/.cc` | wormhole-specific SA path (below) |
-| `NetworkInterface.cc` | `calculateVC()` treats a VC as usable while it has credit |
-
-**Key implementation details in `SwitchAllocator`:**
-
-- Each single-flit packet performs a fresh output-VC allocation; the route is
-  read from the flit itself (`t_flit->get_outport()`), not from the VC.
-- `send_allowed()` uses `has_vc_available(vnet, wormhole)` — a new packet may
-  be sent if *any* VC of the vnet still has a free buffer slot.
-- `vc_allocate()` uses `select_vc(vnet, wormhole)`, which prefers to keep
-  filling an already-`ACTIVE_` VC and only activates an `IDLE_` VC otherwise.
-- Credit return: when a flit leaves an input VC, a **free** credit is sent
-  upstream only once the buffer is completely empty
-  (`input_unit->isBufferEmpty(invc)`); otherwise a non-free credit returns a
-  single buffer slot.
-
-### Comparison matrix (Lab 3 Task 2)
-
-| Config | VCs | Depth | Mechanism |
-|--------|-----|-------|-----------|
-| `vc1_d1`  | 1  | 1 | default credit-based |
-| `vc16_d1` | 16 | 1 | default credit-based |
-| `vc1_d16_wh` | 1 | 16 | `--wormhole` |
-
----
-
-## 4. Lab 4 — Project: Flow Control (Escape VC & Bubble)
-
-Two deadlock-avoidance flow-control techniques are implemented for the Ring,
-whose adaptive minimal routing has a cyclic channel dependency and therefore
-deadlocks at high load.
-
-### 4.1 Escape virtual channels
-
-Enabled with `--escape-vc-per-vnet=N`. The `N` lowest-indexed VCs of each
-virtual network are reserved as **escape VCs**; the remaining VCs are adaptive.
-
-**Files changed:**
-
-| File | Change |
-|------|--------|
-| `configs/example/garnet_synth_traffic.py` | `--escape-vc-per-vnet` flag |
-| `GarnetNetwork.py` | `escape_vc_per_vnet` SimObject param |
-| `GarnetNetwork.hh/.cc` | store `m_escape_vc_per_vnet`, expose `getEscapeVcPerVnet()` |
-| `CommonTypes.hh` | `enum VCClass { ESCAPE_VC_, ADAPTIVE_VC_ }` |
-| `Router.hh/.cc` | `isEscapeVC(vc)` — `vc % vcs_per_vnet < escape_vc_per_vnet`; new `m_escaped_flits` stat (`.escaped_flits`) |
-| `VirtualChannel.hh/.cc` | track `m_output_port_adaptive` and `m_output_port_escape` separately |
-| `InputUnit.hh/.cc` | on head arrival compute **both** the adaptive and the escape route (`grant_outport_adaptive/escape`) |
-| `OutputUnit.hh/.cc` | class-aware `has_free_vc / select_free_vc / has_vc_available / select_vc` plus `vc_class_start()` / `vc_class_size()` |
-| `SwitchAllocator.hh/.cc` | class-aware SA with escape fallback (below) |
-
-**Key implementation details in `SwitchAllocator::arbitrate_inports()`**
-for a head flit needing an output VC:
-
-1. An **escape-class input VC** always routes along the escape route
-   (`vc_class = ESCAPE_VC_`).
-2. An adaptive input VC first tries its adaptive output port; if no adaptive
-   output VC is free it **falls back** to the escape route when escape VCs are
-   configured and one is free.
-3. The chosen port is remembered on the VC (`grant_outport`), so body/tail
-   flits and the ordering check see the same route.
-4. `vc_allocate()` restricts selection to the requested VC class, and heads
-   allocated to an escape VC are counted in `m_escaped_flits`.
-
-### 4.2 Bubble flow control
-
-Enabled with `--bubble`. The core idea: **only injection may grow per-direction
-ring occupancy** (ring-to-ring forwarding is net-zero), so injection is
-restricted to keep at least one idle input VC (a "bubble") in each ring
-direction. This provably prevents the ring from filling completely and keeps
-it deadlock-free without escape VCs.
-
-**Files changed:**
-
-| File | Change |
-|------|--------|
-| `configs/example/garnet_synth_traffic.py` | `--bubble` flag |
-| `GarnetNetwork.py` | `bubble` SimObject param |
-| `GarnetNetwork.hh/.cc` | store `m_bubble`, expose `isBubble()` |
-| `CommonTypes.hh` | `BUBBLE_INJECT_MIN_IDLE_VC 2` (injection-side, whole ring), `BUBBLE_ENTER_MIN_IDLE_VC 2` (ring-entry, per direction) |
-| `Router.hh/.cc` | `getNumRingVCs()` and `getNumActiveRingVCs(vnet)` — count VCs on all non-`Local` (ring) input ports |
-| `InputUnit.hh` | `getNumActiveVCs(vnet)` |
-| `OutputUnit.hh` | `num_idle_vcs(vnet)` |
-| `NetworkInterface.cc` | injection-side gate in `calculateVC()` |
-| `SwitchAllocator.cc` | ring-entry gate in `send_allowed()` |
-
-**Two gates:**
-
-- **Injection side** — `NetworkInterface::calculateVC()`: if the attached
-  router has fewer than `BUBBLE_INJECT_MIN_IDLE_VC` idle ring VCs across both
-  directions, injection is refused (returns `-1`). This is the only gate at
-  `vcs_per_vnet == 1`.
-- **Ring entry** — `SwitchAllocator::send_allowed()`: for `vcs_per_vnet >= 2`,
-  a head flit coming from the `Local` port and heading onto a ring direction
-  is blocked if that single direction has fewer than
-  `BUBBLE_ENTER_MIN_IDLE_VC` idle VCs.
-
-Forwarding between ring directions is deliberately **not** gated, since it
-does not change per-direction occupancy; gating it would itself create the
-deadlock it is meant to prevent.
-
----
-
-## 5. Modified-file summary
-
-| Lab / Task | Files |
-|------------|-------|
-| Lab1 T1 | `configs/example/garnet_synth_traffic.py` |
-| Lab1 T2 | `src/mem/ruby/network/garnet/GarnetNetwork.cc`, `network_stats.txt` |
-| Lab2 | *(none)* |
-| Lab3 T1 | `configs/topologies/Ring.py`, `CommonTypes.hh`, `RoutingUnit.hh/.cc`, `Router.hh/.cc` |
-| Lab3 T2 | `garnet_synth_traffic.py`, `GarnetNetwork.py/.hh/.cc`, `CommonTypes.hh`, `OutVcState.cc`, `VirtualChannel.hh/.cc`, `InputUnit.hh/.cc`, `OutputUnit.hh/.cc`, `SwitchAllocator.hh/.cc`, `NetworkInterface.cc` |
-| Lab4 Escape VC | `garnet_synth_traffic.py`, `GarnetNetwork.py/.hh/.cc`, `CommonTypes.hh`, `Router.hh/.cc`, `VirtualChannel.hh/.cc`, `InputUnit.hh/.cc`, `OutputUnit.hh/.cc`, `SwitchAllocator.hh/.cc` |
-| Lab4 Bubble | `garnet_synth_traffic.py`, `GarnetNetwork.py/.hh/.cc`, `CommonTypes.hh`, `Router.hh/.cc`, `InputUnit.hh`, `OutputUnit.hh`, `NetworkInterface.cc`, `SwitchAllocator.cc` |
+The modified gem5 files keep their original license headers.

@@ -10,10 +10,9 @@ Runs ``configs/example/garnet_synth_traffic.py`` for:
 
 Outputs
 -------
-* ``results/lab2_task1.csv``
-* ``results/figures/lab2_task1_latency.png``     (latency vs injection rate)
-* ``results/figures/lab2_task1_throughput.png``  (accepted throughput vs rate)
-* ``results/figures/lab2_task1_hops.png``        (average hops vs rate)
+* ``results/data/lab2_task1.csv``
+* ``results/figures/lab2_task1_analysis.png``    (5 metrics side by side:
+  packet latency, throughput, hops, network latency, queueing latency)
 
 Usage
 -----
@@ -30,7 +29,7 @@ RATES = [0.01, 0.02, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50]
 NUM_CPUS = 64
 SIM_CYCLES = 10000
 
-CSV = RESULTS / "lab2_task1.csv"
+CSV = DATA / "lab2_task1.csv"
 RAW_DIR = RAW / "lab2_task1"
 
 STATS = [
@@ -121,9 +120,15 @@ def plot_figures():
          "Accepted Throughput vs Injection Rate", True),
         ("average_hops", "Average hops",
          "Average Hops vs Injection Rate", False),
+        ("average_packet_network_latency", "Average network latency (cycles)",
+         "Network Latency vs Injection Rate", False),
+        ("average_packet_queueing_latency", "Average queueing latency (cycles)",
+         "Queueing Latency vs Injection Rate", False),
     ]
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    axes = list(axes.ravel())
+    fig.delaxes(axes.pop())  # drop the unused 6th subplot
     for ax, (col, ylabel, caption, ideal) in zip(axes, metrics):
         for i, t in enumerate(TRAFFICS):
             if t in by_traffic:

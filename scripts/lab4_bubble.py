@@ -14,9 +14,11 @@ Deadlocked / timed-out runs are skipped (they have no stats).
 
 Outputs
 -------
-* ``results/lab4_bubble.csv``
-* ``results/figures/lab4_bubble_latency_<pattern>.png``
-* ``results/figures/lab4_bubble_throughput_<pattern>.png``
+* ``results/data/lab4_bubble.csv``
+* ``results/figures/lab4_bubble_{vc1,vc2,vc4}_analysis.png`` — one
+  integrated 3x3 grid per VC group (rows: traffic patterns, columns:
+  latency / accepted throughput / average hops); the layout follows
+  ``generate_bubble_figures.py`` (repo root).
 
 Usage
 -----
@@ -53,7 +55,7 @@ SIM_CYCLES = 100000
 ROUTING = 3
 TIMEOUT = 180
 
-CSV = RESULTS / "lab4_bubble.csv"
+CSV = DATA / "lab4_bubble.csv"
 RAW_DIR = RAW / "lab4_bubble"
 
 FIELDS = [
@@ -119,84 +121,147 @@ def _load():
     return read_csv(CSV)
 
 
+# ---------------------------------------------------------------------------
+# Plotting.  The layout follows ``generate_bubble_figures.py`` (repo root):
+# one integrated 3x3 grid per VC group, rows = traffic patterns, columns =
+# latency / accepted throughput / average hops.  Figures are still written
+# into ``results/figures/``.
+# ---------------------------------------------------------------------------
+# Row order (top -> bottom) of the pattern dimension in every figure.
+FIG_PATTERNS = ["bit_complement", "bit_reverse", "uniform_random"]
+
+MARKERS = ["o", "s", "^", "D", "v"]
+COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+
+# (CSV column, subplot caption, y label, draw ideal line)
+METRICS = [
+    ("avg_pkt_latency",
+     "Latency vs Injection Rate",
+     "Average packet latency (cycles)", False),
+    ("accepted_flits_per_node_cycle",
+     "Accepted Throughput vs Injection Rate",
+     "Accepted throughput (packets/node/cycle)", True),
+    ("avg_hops",
+     "Average Hops vs Injection Rate",
+     "Average hops", False),
+]
+
+# (figure tag, VC label, configs drawn in that figure)
+VC_GROUPS = [
+    ("vc1", "VC=1", ["vc1", "vc1_bubble"]),
+    ("vc2", "VC=2", ["vc2", "vc2_bubble", "vc2_escape"]),
+    ("vc4", "VC=4", ["vc4", "vc4_bubble", "vc4_escape"]),
+]
+
+
+def _points(rows, field):
+    """[(rate, value), ...] for a (config, pattern) subset, sorted by rate."""
+    pts = []
+    for r in rows:
+        try:
+            x, y = float(r["rate"]), float(r[field])
+        except (KeyError, TypeError, ValueError):
+            continue
+        pts.append((x, y))
+    pts.sort()
+    return pts
+
+
+def _plot_vc_group(plt, rows, cfg_list, vc_label, out_path, dpi):
+    """Draw one 3x3 grid (rows: patterns, columns: metrics) and save it."""
+    from matplotlib.lines import Line2D
+
+    max_rate = max(RATES)
+    fig, axes = plt.subplots(3, 3, figsize=(15.5, 11.5))
+    used_deadlock = False
+
+    for row, pat in enumerate(FIG_PATTERNS):
+        for col, (field, caption, ylabel, ideal) in enumerate(METRICS):
+            ax = axes[row][col]
+
+            for ci, cfg in enumerate(cfg_list):
+                pts = _points([r for r in rows
+                               if r["config"] == cfg
+                               and r["pattern"] == pat], field)
+                if not pts:
+                    continue
+                color = COLORS[ci % len(COLORS)]
+                ax.plot([p[0] for p in pts], [p[1] for p in pts],
+                        marker=MARKERS[ci % len(MARKERS)], ms=4.5, lw=1.4,
+                        color=color, label=CONFIGS[cfg]["label"])
+                # Runs beyond the last surviving rate are deadlocked/timed
+                # out (no stats): dashed extension + red X at skipped rates.
+                if pts[-1][0] < max_rate - 1e-9:
+                    used_deadlock = True
+                    skipped = [q for q in RATES if q > pts[-1][0] + 1e-9]
+                    yref = pts[-1][1]
+                    ax.plot([pts[-1][0], max_rate], [yref, yref],
+                            linestyle="--", lw=1.4, color=color)
+                    ax.scatter(skipped, [yref] * len(skipped), marker="x",
+                               color="red", s=42, lw=1.4, zorder=5)
+
+            if ideal:
+                ax.plot([0, max_rate], [0, max_rate], "--", color="gray",
+                        lw=1.0, label="ideal (100% accept)")
+
+            ax.set_xlim(0, max_rate * 1.03)
+            if row == 2:
+                ax.set_xlabel("Injection rate (packets/node/cycle)",
+                              fontsize=9)
+            ax.set_ylabel(ylabel, fontsize=9)
+            if row == 0:
+                ax.set_title(caption, fontsize=11.5)
+            ax.grid(True, alpha=0.3)
+            ax.tick_params(labelsize=9)
+
+    # Proxy handle for the shared legend (only if some run died).
+    if used_deadlock:
+        axes[0][0].scatter([], [], marker="x", color="red", s=42, lw=1.4,
+                           label="deadlock / timeout (run skipped)")
+
+    # One shared legend below the grid.
+    handles, labels = [], []
+    for ax in axes.flat:
+        for h, l in zip(*ax.get_legend_handles_labels()):
+            if l not in labels:
+                handles.append(h)
+                labels.append(l)
+
+    fig.suptitle(f"Flow-control Analysis ({vc_label}, Ring, 16 nodes, "
+                 f"100000 cycles)", fontsize=14)
+    fig.subplots_adjust(left=0.115, right=0.985, top=0.925, bottom=0.10,
+                        hspace=0.42, wspace=0.30)
+
+    # Row headers (traffic pattern), rotated on the left of each row.
+    for row, pat in enumerate(FIG_PATTERNS):
+        pos = axes[row][0].get_position()
+        fig.text(pos.x0 - 0.075, (pos.y0 + pos.y1) / 2.0, pat,
+                 rotation=90, ha="center", va="center",
+                 fontsize=12, fontweight="bold", color="#333333")
+
+    # Explicit separator line between the traffic-pattern rows.
+    for row in range(1, len(FIG_PATTERNS)):
+        y_lo = axes[row][0].get_position().y1
+        y_hi = axes[row - 1][0].get_position().y0
+        y_sep = (y_lo + y_hi) / 2.0
+        fig.add_artist(Line2D([0.025, 0.985], [y_sep, y_sep],
+                              transform=fig.transFigure,
+                              color="#777777", lw=1.1))
+
+    fig.legend(handles, labels, loc="lower center", ncol=len(labels),
+               fontsize=10, bbox_to_anchor=(0.5, 0.005), framealpha=0.9)
+
+    fig.savefig(out_path, dpi=dpi)
+    plt.close(fig)
+
+
 def plot_figures():
     rows = _load()
     plt = matplotlib_plt()
-
-    markers = ["o", "s", "^", "D", "v"]
-    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
-
-    # (CSV column, y label, subplot caption, draw ideal line)
-    metrics = [
-        ("avg_pkt_latency", "Average packet latency (cycles)",
-         "Latency vs Injection Rate", False),
-        ("accepted_flits_per_node_cycle",
-         "Accepted throughput (packets/node/cycle)",
-         "Accepted Throughput vs Injection Rate", True),
-        ("avg_hops", "Average hops",
-         "Average Hops vs Injection Rate", False),
-    ]
-
-    # VC count -> (caption label, config keys in that group)
-    vc_groups = [
-        ("vc1", "VC=1", ["vc1", "vc1_bubble"]),
-        ("vc2", "VC=2", ["vc2", "vc2_bubble", "vc2_escape"]),
-        ("vc4", "VC=4", ["vc4", "vc4_bubble", "vc4_escape"]),
-    ]
-
-    max_rate = max(RATES)
-
-    # 3 traffic patterns x 3 VC counts = 9 figures; each figure: 3 metrics
-    for pat in PATTERNS:
-        for vc_tag, vc_label, cfg_list in vc_groups:
-            fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-            for ax, (col, ylabel, caption, ideal) in zip(axes, metrics):
-                for ci, cfg in enumerate(cfg_list):
-                    pts = [(float(r["rate"]), float(r[col]))
-                           for r in rows
-                           if r["config"] == cfg and r["pattern"] == pat]
-                    pts.sort()
-                    if pts:
-                        ax.plot([p[0] for p in pts], [p[1] for p in pts],
-                                marker=markers[ci % len(markers)],
-                                color=colors[ci % len(colors)],
-                                label=CONFIGS[cfg]["label"])
-                        # deadlocked beyond the last surviving rate: no valid
-                        # value, so dashed horizontal extension + red X.
-                        if pts[-1][0] < max_rate - 1e-9:
-                            dl = [r for r in RATES if r > pts[-1][0] + 1e-9]
-                            yref = pts[-1][1]
-                            ax.plot([pts[-1][0], max_rate], [yref, yref],
-                                    linestyle="--", lw=1.5,
-                                    color=colors[ci % len(colors)])
-                            ax.scatter(dl, [yref] * len(dl), marker="x",
-                                       color="red", s=50, lw=1.5, zorder=5)
-                if ideal:
-                    ax.plot([0, max_rate], [0, max_rate], "--", color="gray",
-                            lw=1, label="ideal (100% accept)")
-                ax.set_xlabel("Injection rate (packets/node/cycle)")
-                ax.set_ylabel(ylabel)
-                ax.set_title(caption)
-                ax.grid(True, alpha=0.3)
-
-            # single shared legend below the figure (incl. the deadlock marker)
-            axes[0].scatter([], [], marker="x", color="red", s=50, lw=1.5,
-                            label="deadlock")
-            handles, labels = [], []
-            for ax in axes:
-                for h, l in zip(*ax.get_legend_handles_labels()):
-                    if l not in labels:
-                        handles.append(h)
-                        labels.append(l)
-            fig.suptitle(f"Flow-control Analysis ({vc_label}, {pat}, "
-                         f"Ring, 16 nodes, 100000 cycles)", fontsize=13)
-            fig.tight_layout(rect=[0, 0.10, 1, 0.92])
-            fig.legend(handles, labels, loc="lower center", ncol=len(labels),
-                       fontsize=9, bbox_to_anchor=(0.5, 0.0))
-            fname = FIGURES / f"lab4_bubble_{pat}_{vc_tag}_analysis.png"
-            fig.savefig(fname, dpi=150)
-            plt.close(fig)
-            print("wrote", fname)
+    for vc_tag, vc_label, cfg_list in VC_GROUPS:
+        out = FIGURES / f"lab4_bubble_{vc_tag}_analysis.png"
+        _plot_vc_group(plt, rows, cfg_list, vc_label, out, dpi=150)
+        print("wrote", out)
 
 
 def main():

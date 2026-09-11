@@ -4,7 +4,7 @@
 Each ``labX_taskX.py`` script does three things:
 
 1. run the gem5 ``garnet_synth_traffic`` experiments,
-2. write one summary CSV into ``results/``,
+2. write one summary CSV into ``results/data/``,
 3. generate figures into ``results/figures/``.
 
 Binary note
@@ -23,18 +23,23 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-GEM5_ROOT = "/home/ubuntu/Labs/gem5"
+# gem5 source tree location. Override it via the GEM5_ROOT environment
+# variable; the repository only ships src_modified/, not a full gem5 checkout.
+GEM5_ROOT = os.environ.get("GEM5_ROOT", "../gem5")
 CONFIG = os.path.join(GEM5_ROOT, "configs", "example", "garnet_synth_traffic.py")
 GEM5 = os.path.join(GEM5_ROOT, "build", "Garnet_standalone", "gem5.opt")
 GEM5_NULL = os.path.join(GEM5_ROOT, "build", "NULL", "gem5.opt")  # stale, see docstring
 
-RESULTS = HERE / "results"
+# results/ is a sibling of scripts/ in the repository layout.
+RESULTS = HERE.parent / "results"
+DATA = RESULTS / "data"
 FIGURES = RESULTS / "figures"
 RAW = RESULTS / "raw"
 
 
 def ensure_dirs():
     RESULTS.mkdir(parents=True, exist_ok=True)
+    DATA.mkdir(parents=True, exist_ok=True)
     FIGURES.mkdir(parents=True, exist_ok=True)
     RAW.mkdir(parents=True, exist_ok=True)
 

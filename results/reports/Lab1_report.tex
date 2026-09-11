@@ -1,0 +1,209 @@
+\documentclass[11pt]{article}
+
+%------------------------- Packages -------------------------
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+\usepackage{indentfirst}
+\usepackage{titling}
+
+% Figures are resolved from results/figures/ (this file lives in results/reports/).
+\graphicspath{{../figures/}}
+
+%------------------------- Paragraph indentation -------------------------
+\setlength{\parindent}{2em}
+\setlength{\parskip}{0pt plus 1pt}
+\setlength{\droptitle}{-1.75cm}
+
+%------------------------- Code style -------------------------
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single
+}
+
+\title{\textbf{Lab1 Report}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Task 1 \& Task 2}
+After setting the \texttt{GlobalFrequency = 2GHz} and adding the new metric, the result \texttt{network\_stats.txt} contains:
+
+\begin{lstlisting}[caption={Example network\_stats.txt contents}]
+packets_injected = 3165                       (Count)
+packets_received = 3162                       (Count)
+average_packet_queueing_latency = 2           (Tick/Count)
+average_packet_network_latency = 13.557559    (Tick/Count)
+average_packet_latency = 15.557559            (Tick/Count)
+average_hops = 5.269450                       (Count/Count)
+reception_rate = 0.004941                     (packets/node/cycle)
+\end{lstlisting}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Snipaste_2026-08-23_21-40-37.png}
+    \caption{Screenshot of \texttt{network\_stats.txt}}
+\end{figure}
+Note:
+
+The Reception Rate of $0.004941$ packets/node/cycle is only about half of the configured injection rate of $0.01$ because the simulation effectively executed roughly $5000$ cycles instead of the $10000$ cycles implied by \texttt{--sim-cycles}. The root cause is a unit mismatch in the termination condition of the synthetic traffic generator. In gem5, \texttt{GlobalFrequency} defines the duration of one tick; setting it to 2GHz makes one tick equal to $0.5$ ns. Meanwhile, the default \texttt{--sys-clock} is 1GHz, so one CPU cycle lasts $1$ ns, i.e., exactly $2$ ticks. However, the generator terminates the simulation inside \texttt{GarnetSyntheticTraffic::tick()} with the check \texttt{curTick() >= simCycles}, which compares the current absolute time measured in ticks against the \texttt{--sim-cycles} value that is nominally expressed in cycles. Consequently, when \texttt{--sim-cycles = 10000} is given, the simulation stops after only $10000$ ticks, which corresponds to $10000 / 2 = 5000$ actual clock cycles rather than $10000$.
+
+\section*{Task 3}
+
+\subsection*{Q1}
+What input parameter options are available for the ``garnet\_synth\_traffic.py''? Briefly describe their usage. Where (in which files) are the default parameters defined? (Tips: use -h option)\\
+
+\begin{lstlisting}[caption={Options for garnet\_synth\_traffic.py}]
+  -h, --help            show this help message and exit
+  -n NUM_CPUS, --num-cpus NUM_CPUS
+  --sys-voltage SYS_VOLTAGE
+                        Top-level voltage for blocks running at system power supply
+  --sys-clock SYS_CLOCK
+                        Top-level clock for blocks running at system speed
+  --list-mem-types      List available memory types
+  --mem-type {CfiMemory,DDR3_1600_8x8,DDR3_2133_8x8,DDR4_2400_16x4,DDR4_2400_4x16,DDR4_2400_8x8,DDR5_4400_4x8,DDR5_6400_4x8,DDR5_8400_4x8,DRAMInterface,GDDR5_4000_2x32,HBM_1000_4H_1x128,HBM_1000_4H_1x64,HBM_2000_4H_1x64,HMC_2500_1x32,LPDDR2_S4_1066_1x32,LPDDR3_1600_1x32,LPDDR5_5500_1x16_8B_BL32,LPDDR5_5500_1x16_BG_BL16,LPDDR5_5500_1x16_BG_BL32,LPDDR5_6400_1x16_8B_BL32,LPDDR5_6400_1x16_BG_BL16,LPDDR5_6400_1x16_BG_BL32,NVMInterface,NVM_2400_1x64,QoSMemSinkInterface,SimpleMemory,WideIO_200_1x128}
+                        type of memory to use
+  --mem-channels MEM_CHANNELS
+                        number of memory channels
+  --mem-ranks MEM_RANKS
+                        number of memory ranks per channel
+  --mem-size MEM_SIZE   Specify the physical memory size (single memory)
+  --enable-dram-powerdown
+                        Enable low-power states in DRAMInterface
+  --mem-channels-intlv MEM_CHANNELS_INTLV
+                        Memory channels interleave
+  --memchecker
+  --external-memory-system EXTERNAL_MEMORY_SYSTEM
+                        use external ports of this port_type for caches
+  --tlm-memory TLM_MEMORY
+                        use external port for SystemC TLM cosimulation
+  --caches
+  --l2cache
+  --num-dirs NUM_DIRS
+  --num-l2caches NUM_L2CACHES
+  --num-l3caches NUM_L3CACHES
+  --l1d_size L1D_SIZE
+  --l1i_size L1I_SIZE
+  --l2_size L2_SIZE
+  --l3_size L3_SIZE
+  --l1d_assoc L1D_ASSOC
+  --l1i_assoc L1I_ASSOC
+  --l2_assoc L2_ASSOC
+  --l3_assoc L3_ASSOC
+  --cacheline_size CACHELINE_SIZE
+  --ruby
+  -m TICKS, --abs-max-tick TICKS
+                        Run to absolute simulated tick specified including ticks from a restored checkpoint
+  --rel-max-tick TICKS  Simulate for specified number of ticks relative to the simulation start tick (e.g. if
+                        restoring a checkpoint)
+  --maxtime MAXTIME     Run to the specified absolute simulated time in seconds
+  -P PARAM, --param PARAM
+                        Set a SimObject parameter relative to the root node. An extended Python multi range slicing
+                        syntax can be used for arrays. For example: 'system.cpu[0,1,3:8:2].max_insts_all_threads =
+                        42' sets max_insts_all_threads for cpus 0, 1, 3, 5 and 7 Direct parameters of the root
+                        object are not accessible, only parameters of its children.
+  --synthetic {uniform_random,tornado,bit_complement,bit_reverse,bit_rotation,neighbor,shuffle,transpose}
+  -i I, --injectionrate I
+                        Injection rate in packets per cycle per node. Takes decimal value between 0 to 1 (eg.
+                        0.225). Number of digits after 0 depends upon --precision.
+  --precision PRECISION
+                        Number of digits of precision after decimal point for injection rate
+  --sim-cycles SIM_CYCLES
+                        Number of simulation cycles
+  --num-packets-max NUM_PACKETS_MAX
+                        Stop injecting after --num-packets-max. Set to -1 to disable.
+  --single-sender-id SINGLE_SENDER_ID
+                        Only inject from this sender. Set to -1 to disable.
+  --single-dest-id SINGLE_DEST_ID
+                        Only send to this destination. Set to -1 to disable.
+  --inj-vnet {-1,0,1,2}
+                        Only inject in this vnet (0, 1 or 2). 0 and 1 are 1-flit, 2 is 5-flit. Set to -1 to inject
+                        randomly in all vnets.
+  --ruby-clock RUBY_CLOCK
+                        Clock for blocks running at Ruby system's speed
+  --access-backing-store
+                        Should ruby maintain a second copy of memory
+  --ports PORTS         used of transitions per cycle which is a proxy for the number of ports.
+  --numa-high-bit NUMA_HIGH_BIT
+                        high order address bit to use for numa mapping. 0 = highest bit, not specified = lowest bit
+  --interleaving-bits INTERLEAVING_BITS
+                        number of bits to specify interleaving in directory, memory controllers and caches. 0 = not
+                        specified
+  --xor-low-bit XOR_LOW_BIT
+                        hashing bit for channel selectionsee MemConfig for explanation of the defaultparameter. If
+                        set to 0, xor_high_bit is alsoset to 0.
+  --recycle-latency RECYCLE_LATENCY
+                        Recycle latency for ruby controller input buffers
+  --topology TOPOLOGY   check configs/topologies for complete set
+  --mesh-rows MESH_ROWS
+                        the number of rows in the mesh topology
+  --network {simple,garnet}
+                        'simple'|'garnet' (garnet2.0 will be deprecated.)
+  --router-latency ROUTER_LATENCY
+                        number of pipeline stages in the garnet router. Has to be >= 1. Can be over-ridden on a per
+                        router basis in the topology file.
+  --link-latency LINK_LATENCY
+                        latency of each link the simple/garnet networks. Has to be >= 1. Can be over-ridden on a
+                        per link basis in the topology file.
+  --link-width-bits LINK_WIDTH_BITS
+                        width in bits for all links inside garnet.
+  --vcs-per-vnet VCS_PER_VNET
+                        number of virtual channels per virtual network inside garnet network.
+  --routing-algorithm ROUTING_ALGORITHM
+                        routing algorithm in network. 0: weight-based table 1: XY (for Mesh. see
+                        garnet/RoutingUnit.cc) 2: Custom (see garnet/RoutingUnit.cc
+  --network-fault-model
+                        enable network fault model: see src/mem/ruby/network/fault_model/
+  --garnet-deadlock-threshold GARNET_DEADLOCK_THRESHOLD
+                        network-level deadlock threshold.
+  --simple-physical-channels
+                        SimpleNetwork links uses a separate physical channel for each virtual network
+\end{lstlisting}
+
+The traffic options are defined in \texttt{configs/example/garnet\_synth\_traffic.py}: \texttt{synthetic}, \texttt{injectionrate}, \texttt{precision}, \texttt{sim-cycles}, \texttt{num-packets-max}, \texttt{single-sender-id}, \texttt{single-dest-id} and \texttt{inj-vnet}. 
+
+The other options are defined in \texttt{configs/common/Options.py}.
+
+\subsection*{Q2}
+What is the unit of "sim-cycles"? What is the unit of "router-latency" and "link-latency". What is the relationship between Tick and Cycle?\\
+
+\texttt{sim-cycles}: cycles. 
+
+\texttt{router-latency}: cycles (number of router pipeline stages). 
+
+\texttt{link-latency}: cycles (flit traversal latency on a link). 
+
+A Tick is the absolute time unit of the simulator, fixed by \texttt{GlobalFrequency} (default $1\ \text{tick}=1\ \text{ps}$); a Cycle is the period of a particular clock domain. Their relationship is
+\[
+1\ \text{cycle (ticks)} = \frac{f_{\text{tick}}}{f_{\text{clock}}},
+\]
+where $f_{\text{tick}}$ is the global tick frequency and $f_{\text{clock}}$ is the clock-domain frequency. For example, with $1\ \text{tick}=1\ \text{ps}$ and a $1\ \text{GHz}$ domain, $1\ \text{cycle}=1000\ \text{ticks}$.
+
+\subsection*{Q3}
+What is the unit of "injectionrate"?\\
+
+Packets per cycle per node (packets/cycle/node) or (count/cycle/count).
+
+\subsection*{Q4}
+Where are the GarnetNetworkInterface and GarnetRouter defined?\\
+
+\texttt{GarnetNetworkInterface} in \texttt{src/mem/ruby/network/garnet/NetworkInterface.hh/.cc}.
+
+\texttt{GarnetRouter} in \texttt{src/mem/ruby/network/garnet/Router.hh/.cc}.
+
+
+\subsection*{Q5}
+In which module(s), packets are generated and injected to the network? In which module(s), packets are buffered during transmission? In which module(s), the program determines if packets can be sent downstream.\\
+
+Generation and injection: \texttt{GarnetSyntheticTraffic} and \texttt{NetworkInterface}.
+
+Buffering: \texttt{NetworkInterface} (\texttt{niOutVcs}), \texttt{Router} (\texttt{InputUnit}/\texttt{OutputUnit}), and \texttt{NetworkLink} (\texttt{linkBuffer}).
+
+Downstream decision: \texttt{Router::wakeup()} (\texttt{SwitchAllocator}/\texttt{OutputUnit}).
+
+\end{document}

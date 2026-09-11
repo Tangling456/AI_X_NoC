@@ -252,6 +252,7 @@ Router::regStats()
 
     m_escaped_flits
         .name(name() + ".escaped_flits")
+        .unit(statistics::units::Count::get())
         .flags(statistics::nozero)
     ;
 }

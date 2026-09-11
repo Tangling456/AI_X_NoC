@@ -10,11 +10,12 @@ Sweeps one parameter at a time over the injection-rate range 0.01 .. 0.50:
 
 Outputs
 -------
-* ``results/lab2_task2.csv``
-* ``results/figures/lab2_task2_vcs_latency.png``
-* ``results/figures/lab2_task2_vcs_throughput.png``
-* ``results/figures/lab2_task2_router_latency.png``
-* ``results/figures/lab2_task2_linkwidth_latency.png``
+* ``results/data/lab2_task2.csv``
+* ``results/figures/lab2_task2_vcs_analysis.png``
+* ``results/figures/lab2_task2_router_analysis.png``
+* ``results/figures/lab2_task2_linkwidth_analysis.png``
+  (each PNG has 5 metrics side by side: packet latency, throughput, hops,
+  network latency, queueing latency)
 
 Usage
 -----
@@ -38,7 +39,7 @@ GROUPS = [
     ("link-width-bits", "--link-width-bits", [32, 64, 128, 256]),
 ]
 
-CSV = RESULTS / "lab2_task2.csv"
+CSV = DATA / "lab2_task2.csv"
 RAW_DIR = RAW / "lab2_task2"
 
 STATS = [
@@ -136,14 +137,20 @@ def plot_figures():
          "Accepted Throughput vs Injection Rate", True),
         ("average_hops", "Average hops",
          "Average Hops vs Injection Rate", False),
+        ("average_packet_network_latency", "Average network latency (cycles)",
+         "Network Latency vs Injection Rate", False),
+        ("average_packet_queueing_latency", "Average queueing latency (cycles)",
+         "Queueing Latency vs Injection Rate", False),
     ]
 
-    # One figure per parameter group: the 3 metrics plotted side by side.
+    # One figure per parameter group: the 5 metrics plotted side by side.
     # Main caption: "<group> Analysis (uniform_random, 8x8 Mesh, 10000 cycles)".
     for g in ["vcs-per-vnet", "router-latency", "link-width-bits"]:
         if g not in groups:
             continue
-        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+        axes = list(axes.ravel())
+        fig.delaxes(axes.pop())  # drop the unused 6th subplot
         for ax, (col, ylabel, caption, ideal) in zip(axes, metrics):
             for vi, v in enumerate(sorted(groups[g])):
                 xs, ys = xy(groups[g][v], col)
